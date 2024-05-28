@@ -1,0 +1,27 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          proxy
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Run /usr/local/bin/proxy on startup
+# Description:       Starts /usr/local/bin/proxy on startup
+### END INIT INFO
+
+case "$1" in
+  start)
+    echo "Starting proxy"
+    /usr/local/bin/proxy
+    ;;
+  stop)
+    # 如果你有停止的需求，可以在这里添加相应的逻辑
+    echo "Stopping proxy"
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac
+
+exit 0

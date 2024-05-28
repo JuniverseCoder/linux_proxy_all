@@ -1,0 +1,8 @@
+[Unit]
+Description=Run /usr/local/bin/proxy on startup
+
+[Service]
+ExecStart=/usr/local/bin/proxy
+
+[Install]
+WantedBy=multi-user.target
