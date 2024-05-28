@@ -1,17 +1,37 @@
 #!/bin/bash
-cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd
-binfile="redsocks_$(uname --machine)"
+
+# 获取脚本所在目录，即使当前文件被软链接到其他文件
+SCRIPT_PATH=$(readlink -f "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+
+# 定义项目根目录
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+
+# 定义目录
+BIN_DIR="${PROJECT_ROOT}/bin"
+CONF_DIR="${PROJECT_ROOT}/conf"
+INSTALL_DIR="${PROJECT_ROOT}/install"
+
+binfile="${INSTALL_DIR}/redsocks_$(uname --machine)"
+if [[ ! -f "${binfile}" ]]; then
+    echo "Error: ${binfile} does not exist."
+    exit 1
+fi
 cp "${binfile}" /usr/bin/redsocks
 
 # 默认值
 DEFAULT_SOCK_SERVER="127.0.0.1"
 DEFAULT_SOCK_PORT="7070"
-DEFAULT_PROXY_PORT="12345"
+DEFAULT_PROXY_PORT="64196"
 
-rm -rf redsocks.conf
-cp redsocks.conf.example /etc/redsocks.conf
+rm -rf /etc/redsocks.conf
+if [[ ! -f "${INSTALL_DIR}/redsocks.conf.example" ]]; then
+    echo "Error: ${INSTALL_DIR}/redsocks.conf.example does not exist."
+    exit 1
+fi
+cp "${INSTALL_DIR}/redsocks.conf.example" /etc/redsocks.conf
 
-CONFIG_FILE="/etc/redsocksenv"
+CONFIG_FILE="${CONF_DIR}/tcp_proxy.conf"
 
 if [[ ! -f $CONFIG_FILE ]]; then
     # 本地不存在代理服务器的配置
@@ -32,7 +52,6 @@ else
     source $CONFIG_FILE
 fi
 
-
 # 函数用于更新 redsocks.conf 文件
 update_redsocks_conf() {
     sed -i '18s/daemon.*/daemon = on;/g' /etc/redsocks.conf
@@ -47,7 +66,11 @@ update_redsocks_conf
 # 检查当前初始化系统类型
 if [[ $(ps -p 1 -o comm=) == "systemd" ]]; then
     # systemd 初始化系统的服务管理命令
-    cp redsocks.service /lib/systemd/system/
+    if [[ ! -f "${INSTALL_DIR}/redsocks.service" ]]; then
+        echo "Error: ${INSTALL_DIR}/redsocks.service does not exist."
+        exit 1
+    fi
+    cp "${INSTALL_DIR}/redsocks.service" /lib/systemd/system/
     sed -i 's/SOCK_SERVER/'${SOCK_SERVER}'/g' /lib/systemd/system/redsocks.service
     systemctl daemon-reload
     systemctl enable redsocks.service
@@ -61,7 +84,11 @@ if [[ $(ps -p 1 -o comm=) == "systemd" ]]; then
     fi
 else
     # SysV init 初始化系统的服务管理命令
-    cp redsocks-service /etc/init.d/redsocks
+    if [[ ! -f "${INSTALL_DIR}/redsocks-service" ]]; then
+        echo "Error: ${INSTALL_DIR}/redsocks-service does not exist."
+        exit 1
+    fi
+    cp "${INSTALL_DIR}/redsocks-service" /etc/init.d/redsocks
     sed -i 's/SOCK_SERVER/'${SOCK_SERVER}'/g' /etc/init.d/redsocks
     chmod +x /etc/init.d/redsocks
 
@@ -74,24 +101,28 @@ else
     fi
 fi
 
-
-# 复制代理设置
-/bin/cp NoProxy.txt /etc/NoProxy.txt
-/bin/cp GFlist.txt /etc/GFlist.txt
-
-# 复制代理脚本
-/bin/cp -rf proxy.sh /usr/local/bin/proxy && chmod +x /usr/local/bin/proxy && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxy && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxy
+# 建立软连接
+chmod +x "${BIN_DIR}/proxy.sh"
+ln -sf "${BIN_DIR}/proxy.sh" /usr/local/bin/proxy
 
 # 设置启动时自动代理
 if [[ $(ps -p 1 -o comm=) == "systemd" ]]; then
     # systemd 初始化系统的服务管理命令
-    cp redsocks_proxy.service /lib/systemd/system/
+    if [[ ! -f "${INSTALL_DIR}/redsocks_proxy.service" ]]; then
+        echo "Error: ${INSTALL_DIR}/redsocks_proxy.service does not exist."
+        exit 1
+    fi
+    cp "${INSTALL_DIR}/redsocks_proxy.service" /lib/systemd/system/
     systemctl daemon-reload
     systemctl enable redsocks_proxy.service
     systemctl restart redsocks_proxy.service
 else
     # SysV init 初始化系统的服务管理命令
-    cp redsocks_proxy-service /etc/init.d/redsocks_proxy
+    if [[ ! -f "${INSTALL_DIR}/redsocks_proxy-service" ]]; then
+        echo "Error: ${INSTALL_DIR}/redsocks_proxy-service does not exist."
+        exit 1
+    fi
+    cp "${INSTALL_DIR}/redsocks_proxy-service" /etc/init.d/redsocks_proxy
     chmod +x /etc/init.d/redsocks_proxy
     service redsocks restart
 fi

@@ -20,7 +20,7 @@
 
 ```bash
 Shell> git clone 本仓库
-Shell> ./install_redsocks.sh
+Shell> bin/init_tcp_proxy.sh
 please tell me your sock_server (default: 127.0.0.1): # 输入 Socket5代理服务器的地址（默认为 127.0.0.1）
 please tell me your sock_port (default: 7070):        # 输入 Socket5代理服务器的端口（默认为 7070）
 Please tell me your proxy_port (default: 12345):      # 输入 Redsock的监听端口（默认为 12345）
@@ -59,10 +59,10 @@ Shell> proxy all      # 启动全局代理模式，此模式下将代理所有�
 
 **代理指定主机**
 
-此模式下仅代理 `GFlist.txt` 中指定的主机。
+此模式下仅代理 `conf/proxy.conf` 中指定的主机。
 
 ```bash
-Shell> proxy gflist
+Shell> proxy rule
 
 this ip[216.58.194.99] will use proxy connected ....
 this ip[180.97.33.107] will use proxy connected ....
@@ -100,7 +100,7 @@ Shell> service redsocks stop             # 关闭代理
 
 ```bash
 Shell> git clone 本仓库
-Shell> ./install_dns.sh
+Shell> bin/init_dns_proxy.sh
 Please enter PROXY_DNS_PORT (default: 5300): # 输入 pdnsd 的监听端口
 Please enter DEFAULT_NAMESERVER (default: $DEFAULT_NAMESERVER): # 输入默认的 DNS 服务器
 
@@ -135,7 +135,7 @@ Please enter DEFAULT_NAMESERVER (default: $DEFAULT_NAMESERVER): # 输入默认�
 
 ## 修改代理的 DNS 名单
 
-需要在 `proxy_dns.txt` 中添加域名，每行一个。使用 `.` 作为前缀将匹配所有子域名，例如：
+需要在 `dns_rule.conf` 中添加域名，每行一个。使用 `.` 作为前缀将匹配所有子域名，例如：
 
 ```bash
 .google.com
@@ -145,7 +145,7 @@ Please enter DEFAULT_NAMESERVER (default: $DEFAULT_NAMESERVER): # 输入默认�
 修改后重新执行脚本：
 
 ```bash
-Shell> ./install_dns.sh
+Shell> bin/init_dns_proxy.sh
 ```
 
 
@@ -185,7 +185,7 @@ service pdnsd start
 dig @默认代理IP github.com
 ```
 
-如果不正常，检查默认代理IP是否正确。修改 `dnsserverinfo` 中的 `DEFAULT_NAMESERVER`，然后重新运行 `./install_dns.sh` 来更新配置。
+如果不正常，检查默认代理IP是否正确。修改 `dnsserverinfo` 中的 `DEFAULT_NAMESERVER`，然后重新运行 `bin/install_dns.sh` 来更新配置。
 
 ### 4. 检查 `dnsmasq` 状态
 

@@ -1,32 +1,42 @@
 #!/bin/bash
 set -e
 
-# 获取脚本所在目录
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# 获取脚本所在目录，即使当前文件被软链接到其他文件
+SCRIPT_PATH=$(readlink -f "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 
-# 从dnsserverinfo文件中读取$PROXY_DNS_PORT和DEFAULT_NAMESERVER，如果文件不存在则使用默认值
-if [[ -f dnsserverinfo ]]; then
-    source dnsserverinfo
+# 定义项目根目录
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+
+# Define directories
+CONF_DIR="${PROJECT_ROOT}/conf"
+INSTALL_DIR="${PROJECT_ROOT}/install"
+
+DNS_PROXY_CONF="${CONF_DIR}/dns_proxy.conf"
+
+# 从 dns_proxy.conf 文件中读取 $PROXY_DNS_PORT 和 $DEFAULT_NAMESERVER，如果文件不存在则使用默认值
+if [[ -f "$DNS_PROXY_CONF" ]]; then
+    source "$DNS_PROXY_CONF"
 else
-    # 用户输入PROXY_DNS_PORT和DEFAULT_NAMESERVER
+    # 用户输入 PROXY_DNS_PORT 和 DEFAULT_NAMESERVER
     read -p "Please enter PROXY_DNS_PORT (default: 5300): " PROXY_DNS_PORT
     PROXY_DNS_PORT=${PROXY_DNS_PORT:-5300}
     DEFAULT_NAMESERVER=$(awk '/nameserver/ && !/^#/{print $2; exit}' /etc/resolv.conf)
     read -p "Please enter DEFAULT_NAMESERVER (default: $DEFAULT_NAMESERVER): " custom_nameserver
     DEFAULT_NAMESERVER=${custom_nameserver:-$DEFAULT_NAMESERVER}
-    # 保存输入值到dnsserverinfo文件
-    echo "PROXY_DNS_PORT=$PROXY_DNS_PORT" > dnsserverinfo
-    echo "DEFAULT_NAMESERVER=$DEFAULT_NAMESERVER" >> dnsserverinfo
+    # 保存输入值到 dns_proxy.conf 文件
+    echo "PROXY_DNS_PORT=$PROXY_DNS_PORT" > "$DNS_PROXY_CONF"
+    echo "DEFAULT_NAMESERVER=$DEFAULT_NAMESERVER" >> "$DNS_PROXY_CONF"
 fi
 
 update_pdnsd_config(){
-    cat default_pdnsd.example > /etc/default/pdnsd
-    cat pdnsd.conf.example > /etc/pdnsd.conf
+    cp "${INSTALL_DIR}/default_pdnsd.example" /etc/default/pdnsd
+    cp "${INSTALL_DIR}/pdnsd.conf.example" /etc/pdnsd.conf
     sed -i "s|\${PROXY_DNS_PORT}|$PROXY_DNS_PORT|g" /etc/pdnsd.conf
 }
 
-# 检查pdnsd服务是否已经存在
-if ! command -v  pdnsd &>/dev/null; then
+# 检查 pdnsd 服务是否已经存在
+if ! command -v pdnsd &>/dev/null; then
     # 如果服务不存在，执行安装和配置
     echo "pdnsd service does not exist, installing and configuring..."
 
@@ -36,24 +46,24 @@ if ! command -v  pdnsd &>/dev/null; then
         exit 1
     fi
 
-    # 安装pdnsd
+    # 安装 pdnsd
     if [ -f /etc/os-release ]; then
         source /etc/os-release
         case $ID in
             debian|ubuntu)
-                # 安装pdnsd on Debian/Ubuntu
+                # 安装 pdnsd on Debian/Ubuntu
                 arch=$(dpkg --print-architecture)
                 package_name="pdnsd_1.2.9a-par-3"
-                deb_file="${package_name}_${arch}.deb"
+                deb_file="${INSTALL_DIR}/${package_name}_${arch}.deb"
 
                 echo "Installing $deb_file"
                 dpkg -i "$deb_file"
                 ;;
             fedora|centos|rhel)
-                # 安装pdnsd on Fedora/CentOS/RHEL
+                # 安装 pdnsd on Fedora/CentOS/RHEL
                 arch=$(uname -m)
                 package_name="pdnsd-1.2.9a-par"
-                rpm_file="${package_name}.${arch}.rpm"
+                rpm_file="${INSTALL_DIR}/${package_name}.${arch}.rpm"
 
                 echo "Installing $rpm_file"
                 rpm -i "$rpm_file"
@@ -81,35 +91,35 @@ else
     service pdnsd restart
 fi
 
-# 定义函数来处理DNS规则配置
+# 定义函数来处理 DNS 规则配置
 configure_dns_rules() {
-    # 初始化SERVER_RULES变量为空字符串
+    # 初始化 SERVER_RULES 变量为空字符串
     SERVER_RULES=""
 
-    # 读取proxy_dns.txt文件的每一行
+    # 读取 dns_rule.conf 文件的每一行
     while IFS= read -r line; do
         # 去除前后的空白
         trimmed_line="$(echo -e "${line}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-        # 如果行不为空，则添加server规则到SERVER_RULES变量
+        # 如果行不为空，则添加 server 规则到 SERVER_RULES 变量
         if [ -n "$trimmed_line" ]; then
             SERVER_RULES+="server=/$trimmed_line/127.0.0.1#$PROXY_DNS_PORT\n"
         fi
-    done < "proxy_dns.txt"
+    done < "${CONF_DIR}/dns_rule.conf"
 
-    # 拷贝dnsmasq.conf.example文件到/etc/dnsmasq.conf
-    cp "${SCRIPT_DIR}/dnsmasq.conf.example" /etc/dnsmasq.conf
+    # 拷贝 dnsmasq.conf.example 文件到 /etc/dnsmasq.conf
+    cp "${INSTALL_DIR}/dnsmasq.conf.example" /etc/dnsmasq.conf
 
-    # 替换文件中的${SERVER_RULES}和${DEFAULT_NAMESERVER}
+    # 替换文件中的 ${SERVER_RULES} 和 ${DEFAULT_NAMESERVER}
     sed -i "s|\${SERVER_RULES}|$SERVER_RULES|g" /etc/dnsmasq.conf
     sed -i "s|\${DEFAULT_NAMESERVER}|$DEFAULT_NAMESERVER|g" /etc/dnsmasq.conf
 }
 
-# 检查dnsmasq服务是否已经存在
+# 检查 dnsmasq 服务是否已经存在
 if ! command -v dnsmasq &>/dev/null; then
     # 如果服务不存在，执行安装和配置
     echo "dnsmasq service does not exist, installing and configuring..."
-    # 安装dnsmasq
+    # 安装 dnsmasq
     if [ -f /etc/redhat-release ]; then
         yum update -y
         yum install -y dnsmasq
@@ -127,7 +137,7 @@ if ! command -v dnsmasq &>/dev/null; then
         systemctl disable systemd-resolved
     fi
 
-    # 配置dnsmasq服务自动启动
+    # 配置 dnsmasq 服务自动启动
     if [[ $(ps -p 1 -o comm=) == "systemd" ]]; then
         # Systemd 系统
         systemctl enable dnsmasq
@@ -136,26 +146,26 @@ if ! command -v dnsmasq &>/dev/null; then
         chkconfig dnsmasq on
     fi
 
-    # 询问是否修改/etc/resolv.conf的nameserver为127.0.0.1
+    # 询问是否修改 /etc/resolv.conf 的 nameserver 为 127.0.0.1
     read -p "Do you want to set nameserver in /etc/resolv.conf to 127.0.0.1? (y/n): " set_nameserver
     if [ "$set_nameserver" == "y" ]; then
         echo "nameserver 127.0.0.1" > /etc/resolv.conf
-        # 锁定/etc/resolv.conf文件
+        # 锁定 /etc/resolv.conf 文件
         chattr +i /etc/resolv.conf
         echo "nameserver in /etc/resolv.conf set to 127.0.0.1 and locked."
     else
         echo "nameserver in /etc/resolv.conf remains unchanged."
     fi
-    
+
 else
     # 如果服务已存在，只更新配置文件
     echo "dnsmasq service already exists, updating configuration..."
 fi
 
-# 调用函数来配置DNS规则
+# 调用函数来配置 DNS 规则
 configure_dns_rules
 
-# 重启更新dnsmasq配置文件的
+# 重启更新 dnsmasq 配置文件的服务
 if [[ $(ps -p 1 -o comm=) == "systemd" ]]; then
     # Systemd 系统
     systemctl restart dnsmasq
@@ -163,4 +173,3 @@ else
     # SysV Init 系统
     service dnsmasq restart
 fi
-
